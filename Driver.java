@@ -25,17 +25,31 @@ public class Driver {
 	public static String originalFile = "";
 	public static int fileNumber = 0;
 	public static int counter = 0;
-
+	public static PrintWriter outputLog = null;
+	public static int fileCounter = 1;
+	
 	public static void main(String[] args) {
-		System.out.println("\n------------------------------------------------------------------------\n"
-				+ "\t\t Starting the program\n"
-				+ "------------------------------------------------------------------------");
+		System.out.println("\n-------------------------------------------------------------------------------------------\n"
+				+ "\t\t     Starting the program\n"
+				+ "\t\t     \t\t\t Written by: Harmanvir Singh & Sarabpreet Singh\n"
+				+ "-------------------------------------------------------------------------------------------");
+		File fileLogBook = new File("logBook.txt");
+		
+		try{
+			FileOutputStream fouts = new FileOutputStream(fileLogBook,true);
+			outputLog = new PrintWriter(fouts);
+		}
+		catch(FileNotFoundException e) {
+			System.out.println("Log file cannot be created....!!");
+			System.exit(0);
+		}
+		
 		int repeat = 2;
 		while (repeat > 0) {
 			counter = 0;
-			System.out.println("\n***********************************************************************\n"
-					+ "\t\t Select the File"
-					+ "\n***********************************************************************\n");
+			System.out.println("\n\t****************************************\n"
+					+ "\t\t    Select the File"
+					+ "\n\t****************************************\n");
 			File file = new File(".");
 			filesInDirectory = file.list();
 			/*------------------------------------------------------------------------
@@ -65,11 +79,166 @@ public class Driver {
 			originalFile = fileName;
 			fileName = fileName + ".tex";
 			fileToWrite = new File(fileName);
-			String logName = originalFile + "logBook.txt";
-			File fileLogBook = new File(logName);
 			processFilesForValidation(fileRead, fileToWrite, fileLogBook);
 			repeat--;
 		}
+		//Reading files after creation of new files. 
+		File file = new File(".");
+		filesInDirectory = file.list();
+		selectTexNTextFile();
+	}
+	
+	/**
+	 * This method represents the core engine for processing the input files and creating the output ones.
+	 * It reads from the file and writes to the given file. Moreover it generates the log file, which 
+	 * stores the information as described by the user.
+	 * 
+	 * @param fileRead		File from which input is taken.
+	 * @param fileToWrite	File to which output is printed. 
+	 * @param fileLogBook	File which stores all the information about the errors and empty spaces.
+	 */
+	public static void processFilesForValidation(File fileRead, File fileToWrite, File fileLogBook) {//Opening the provided file and trying to create new file to write data.
+		PrintWriter output = null;
+		Scanner input = null;
+		try {
+			input = new Scanner(fileRead);
+		} catch (FileNotFoundException e) {
+			System.out.println("Could not open file " + fileRead.getName() + " for reading\n"
+					+ "Please check if file exists! Program will terminate after closing all files.");
+			System.exit(0);
+		}
+		try {
+			output = new PrintWriter(fileToWrite);
+			FileOutputStream fouts = new FileOutputStream(fileLogBook,true);
+			outputLog = new PrintWriter(fouts);
+		} catch (FileNotFoundException e) {
+			System.out.println("Could not create file " + fileToWrite.getName() + "\n" + "Terminating the Program....");
+			input.close();
+			System.exit(0);
+		}
+		outputLog.println("\t Keeping track of Empty data entry and empty attribute," + "from "+ fileRead.getName());
+		//Reading from the provided files and writing a LaTAX file.
+		String firstLine = input.nextLine();
+		String[] titleArray = firstLine.split(",", -1);
+		String title = titleArray[0];
+		System.out.println("Reading from the file \"" + filesWithGivenExtention[fileNumber - 1] + "\"....");
+		System.out.println("Writing to the file \"" + fileToWrite.getName() + "\"....\n");
+		output.println("\\begin{table}[]");
+		output.print("\t\\begin{tabular}");
+		output.println(printNumberOfColumn(firstLine));
+		output.println("\t\t\\toprule");
+		while (input.hasNextLine()) {
+			String line = input.nextLine();
+			String[] lineArray = line.split(",", -1);
+			String lineToOutput = "";
+			// Reading the line which contains the attributes.
+			if (counter == 0) {
+				attributeArray = lineArray;
+				for (int i = 0; i < lineArray.length; i++) {
+					// Empty Attributes Condition.
+					try {
+						if (lineArray[i].trim().equals("")) {
+							throw (new CSVFileInvalidException());
+						}
+					} catch (CSVFileInvalidException e) {
+						System.out.println(e.getMessage());
+						outputLog.println(e.getMessage() + "\n");
+						outputLog.flush();
+						output.close();
+						if (fileToWrite.delete()) {
+							System.out.println("\nDeleted the file: " + fileToWrite.getName());
+						} else {
+							System.out.println("\nFailed to delete the file.");
+						}
+						outputLog.close();
+					}
+					if (i == lineArray.length - 1) {
+						lineToOutput = lineToOutput + lineArray[i];
+					} else {
+						lineToOutput = lineToOutput + lineArray[i] + " & ";
+					}
+				}
+			}
+			// Reading the line which contains data.
+			else {
+				dataArray = lineArray;
+				for (int i = 0; i < lineArray.length; i++) {
+					// Empty data condition.
+					try {
+						if (lineArray[i].trim().equals("")) {
+							throw (new CSVDataMissing());
+						}
+					} catch (CSVDataMissing e) {
+						System.out.println(e.getMessage());
+						outputLog.println("File " + fileRead.getName() + " line " + (counter + 2) + "\n" + getData()+"\n");
+					}
+					if (i == lineArray.length - 1) {
+						lineToOutput = lineToOutput + lineArray[i];
+					} else {
+						lineToOutput = lineToOutput + lineArray[i] + " & ";
+					}
+				}
+			}
+			//If it is a last line the \botomrule will be inserted. 
+			if (input.hasNextLine()) {
+				output.println("\t\t" + lineToOutput + "\\\\ \\midrule");
+			} else {
+				output.println("\t\t" + lineToOutput + "\\\\ \\bottomrule");
+			}
+			outputLog.flush();
+			counter++;
+		}
+		output.println("\t\\end{tabular}");
+		output.println("\t\\caption{" + title.trim() + "}");
+		output.println("\t\\label{" + originalFile + "}");
+		output.println("\\end{table}");
+		System.out.println("Successfully finished writing to the file " + fileToWrite.getName() + "....");
+		outputLog.close();
+		output.close();
+		input.close();
+	}
+	
+	/**
+	 * This method reads the output file using BufferedReader class. If user enters wrong file name 
+	 * then one another chance is given to him/her to re-enter the name.
+	 */
+	private static void selectTexNTextFile() {
+			System.out.println("\n\t****************************************\n"
+					+ "\tSelect one of the created File to output"
+					+ "\n\t****************************************\n");
+			endsWith(".tex");
+			System.out.print("Enter the file name with the extension: ");
+			Scanner keyIn = new Scanner(System.in);
+			String fileNameKeyIn = keyIn.next();
+			BufferedReader brin = null;
+			try {
+				FileReader fr = new FileReader(fileNameKeyIn);
+				brin = new BufferedReader(fr);
+				String line = brin.readLine();
+				while( line != null) {
+					System.out.println(line);
+					line = brin.readLine();
+				}
+			}
+			catch(FileNotFoundException e) {
+				System.out.println("File Not Found...!!\n");
+				//If <code> fileCounter </code> is 1, another chance will be given to the user 
+				//to re-enter the file name.
+				if(fileCounter == 2) {
+					System.out.println("You have tried 2 times....\nTerminating the program....");
+					System.exit(0);
+				}
+				if(fileCounter == 1) {
+					fileCounter = 2;
+					System.out.println("Try again, you have one more chance...!!");
+					selectTexNTextFile();
+				}
+			}
+			catch(IOException e) {
+				System.out.println("IOException....!!");
+				System.exit(0);
+			}
+			keyIn.close();
 	}
 
 	/**
@@ -135,116 +304,6 @@ public class Driver {
 		}
 		System.out.println(
 				"\nYou have a total of " + filesWithGivenExtention.length + " files with the given Extension name.");
-	}
-
-	/**
-	 * This method represents the core engine for processing the input files and creating the output ones.
-	 * It reads from the file and writes to the given file. Moreover it generates the log file, which 
-	 * stores the information as described by the user.
-	 * 
-	 * @param fileRead		File from which input is taken.
-	 * @param fileToWrite	File to which output is printed. 
-	 * @param fileLogBook	File which stores all the information about the errors and empty spaces.
-	 */
-	public static void processFilesForValidation(File fileRead, File fileToWrite, File fileLogBook) {//Opening the provided file and trying to create new file to write data.
-		PrintWriter output = null;
-		Scanner input = null;
-		PrintWriter outputLog = null;
-		try {
-			input = new Scanner(fileRead);
-		} catch (FileNotFoundException e) {
-			System.out.println("Could not open file " + fileRead.getName() + " for reading\n"
-					+ "Please check if file exists! Program will terminate after closing all files.");
-			System.exit(0);
-		}
-		try {
-			output = new PrintWriter(fileToWrite);
-			outputLog = new PrintWriter(fileLogBook);
-		} catch (FileNotFoundException e) {
-			System.out.println("Could not create file " + fileToWrite.getName() + "\n" + "Terminating the Program....");
-			input.close();
-			System.exit(0);
-		}
-		//Reading from the provided files and writing a LaTAX file.
-		String firstLine = input.nextLine();
-		String[] titleArray = firstLine.split(",", -1);
-		String title = titleArray[0];
-		outputLog.println("\t\t\t\t Keeping track of Empty data entry and empty attribute.");
-		System.out.println("Reading from the file \"" + filesWithGivenExtention[fileNumber - 1] + "\"....");
-		System.out.println("Writing to the file \"" + fileToWrite.getName() + "\"....\n");
-		output.println("\\begin{table}[]");
-		output.print("\t\\begin{tabular}");
-		output.println(printNumberOfColumn(firstLine));
-		output.println("\t\t\\toprule");
-		while (input.hasNextLine()) {
-			String line = input.nextLine();
-			String[] lineArray = line.split(",", -1);
-			String lineToOutput = "";
-			// Reading the line which contains the attributes.
-			if (counter == 0) {
-				attributeArray = lineArray;
-				for (int i = 0; i < lineArray.length; i++) {
-					// Empty Attributes Condition.
-					try {
-						if (lineArray[i].trim().equals("")) {
-							throw (new CSVFileInvalidException());
-						}
-					} catch (CSVFileInvalidException e) {
-						System.out.println(e.getMessage());
-						outputLog.println(e.getMessage());
-						output.close();
-						input.close();
-						if (fileToWrite.delete()) {
-							System.out.println("\nDeleted the file: " + fileToWrite.getName());
-						} else {
-							System.out.println("\nFailed to delete the file.");
-						}
-						outputLog.close();
-						System.exit(0);
-					}
-					if (i == lineArray.length - 1) {
-						lineToOutput = lineToOutput + lineArray[i];
-					} else {
-						lineToOutput = lineToOutput + lineArray[i] + " & ";
-					}
-				}
-			}
-			// Reading the line which contains data.
-			else {
-				dataArray = lineArray;
-				for (int i = 0; i < lineArray.length; i++) {
-					// Empty data condition.
-					try {
-						if (lineArray[i].trim().equals("")) {
-							throw (new CSVDataMissing());
-						}
-					} catch (CSVDataMissing e) {
-						System.out.println(e.getMessage());
-
-						outputLog.println("File " + fileRead.getName() + " line " + (counter + 2) + "\n" + getData());
-					}
-					if (i == lineArray.length - 1) {
-						lineToOutput = lineToOutput + lineArray[i];
-					} else {
-						lineToOutput = lineToOutput + lineArray[i] + " & ";
-					}
-				}
-			}
-			if (input.hasNextLine()) {
-				output.println("\t\t" + lineToOutput + "\\\\ \\midrule");
-			} else {
-				output.println("\t\t" + lineToOutput + "\\\\ \\bottomrule");
-			}
-			counter++;
-		}
-		output.println("\t\\end{tabular}");
-		output.println("\t\\caption{" + title.trim() + "}");
-		output.println("\t\\label{" + originalFile + "}");
-		output.println("\\end{table}");
-		System.out.println("Successfully finished writing to the file " + fileToWrite.getName() + "....");
-		outputLog.close();
-		output.close();
-		input.close();
 	}
 
 	/**
