@@ -1,2 +1,2 @@
 # CSV_to_LaTeX
-Converts a CSV file into LaTeX file.
+Reads a Comma Seperated File(CSV) file and then convnrts it into LaTeX code as an output file.
